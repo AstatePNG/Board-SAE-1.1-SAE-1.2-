@@ -2,4 +2,4 @@
 
 This is a two part work made during my formation.
 
-First part was made in 11h, and consist of the playable game (with a French interface). 
+First part (game.c) was made with another person in 11h, and consist of the playable game (with a French interface). 
