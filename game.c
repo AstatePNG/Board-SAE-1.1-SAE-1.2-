@@ -435,6 +435,7 @@ void allow_back_piece(board game){
 		if(get_place_holder(game,asked_nb_line,asked_nb_column)==NO_PLAYER){
 			if(insert_pawn(game,asked_nb_line,asked_nb_column)==OK){
 				printf("Piece placée en %c%d.\n",asked_nb_column,asked_nb_line);
+				display_current_board(game);
 				i++;
 			}
 			else{
