@@ -64,8 +64,8 @@ struct board_s {
  * If not, the function get another random digit.*/
 
 int legal_random_number(int line, int tab_value[]){
-	int value=rand()%NB_DIGITS+1;
-	if(tab_value[value-1]==DIMENSION/NB_DIGITS){
+	int value=rand()%3+1;
+	if((line<2 && tab_value[value-1]==(2*DIMENSION)/NB_DIGITS) || (line>=DIMENSION-2 && tab_value[value-1]==2*((2*DIMENSION)/NB_DIGITS))){
 		return legal_random_number(line,tab_value);
 	}
 	else{
@@ -73,14 +73,12 @@ int legal_random_number(int line, int tab_value[]){
 	}
 }
 
-board new_game(){
+board new_random_game(){
     board new_board = malloc(sizeof(struct board_s));
     for(int l = 0; l < DIMENSION; l++){
         int digit = (2 * NB_DIGITS - l) % NB_DIGITS;
         for(int c = 0; c < DIMENSION; c++){
             new_board->table[l][c].digit = digit + 1;
-			new_board->table[l][c].piece=NONE;
-			new_board->table[l][c].piece_owner=NO_PLAYER;
             digit = (digit + 1 + (l % 2)) % NB_DIGITS;
         }
     }
@@ -92,20 +90,19 @@ board new_game(){
     return new_board;
 }
 
-board new_random_game(){
+board new_game(){
 	board new_board = malloc(sizeof(struct board_s));
 	int num_digit[NB_DIGITS];
+	for(int i=0;i<NB_DIGITS;i++){
+		num_digit[i]=0;
+	}
 	int value;
 	for(int l=0;l<DIMENSION;l++){
-    	for(int i=0;i<NB_DIGITS;i++){
-    		num_digit[i]=0;
-    	}
 		for(int c=0;c<DIMENSION;c++){
 			value=legal_random_number(l,num_digit);
-			new_board->table[l][c].digit=value;
-			new_board->table[l][c].piece=NONE;
-			new_board->table[l][c].piece_owner=NO_PLAYER;
-			num_digit[value-1]++;
+			if(l<2 || l>=DIMENSION-2){
+				num_digit[value-1]++;
+			}
 		}
 	}
 	new_board->current_player=NORTH;
@@ -130,9 +127,6 @@ board copy_game(board original_game){
 	new_board->selected_piece.column=original_game->selected_piece.column;
 	new_board->current_position.line=original_game->current_position.line;
 	new_board->current_position.column=original_game->current_position.column;
-	new_board->last_move.column=original_game->last_move.column;
-	new_board->last_move.line=original_game->last_move.line;
-	new_board->nb_move=original_game->nb_move;
 	return new_board;
 }
 
@@ -175,7 +169,7 @@ player get_winner(board game){
             }
         }
     }
-    if(cpt==NB_PLAYERS || game->phase==0){
+    if(cpt==NB_PLAYERS){
         return NO_PLAYER;
     }
     else{
@@ -195,34 +189,34 @@ int get_nb_pieces_on_board(board game, player checked_player){
     }
     return cpt;
 }
-
+ 
 int get_prescribed_move (board game) {
 	return game->prescribed_digit;
 }
 
 type piece_to_place (board game) {
 	int on_board_pieces=get_nb_pieces_on_board(game,game->current_player);
-	if (game->phase==1){
-		return NONE;
-	}
 	if (on_board_pieces==0){
 		return KING;
 	}
-	else {
+	else if (on_board_pieces<NB_INITIAL_PIECES){
 		return PAWN;
+	}
+	else{
+		return NONE;
 	}
 }
 
 enum return_code place_piece(board game, int line, int column){
     player p = current_player(game);
     type t_piece = piece_to_place(game);
-    //Gère les erreurs si l'endroit désignée par line et column n'est pas dans le plateau
-    if(line<0 || line>=DIMENSION || column<0 || column>=DIMENSION){
-        return OUT;
-    }
     //Gère l'erreur si la settings-up est finit
     if(game->phase == 1){
         return STAGE;
+    }
+    //Gère les erreurs si l'endroit désignée par line et column n'est pas dans le plateau
+    if(line<0 || line>=DIMENSION || column<0 || column>=DIMENSION){
+        return OUT;
     }
     //Gère les erreurs de placement par rapport au joueur
     if(game->current_player == NORTH){
@@ -236,7 +230,7 @@ enum return_code place_piece(board game, int line, int column){
         }
     }
     //Gère les erreurs si un pion est déja présent
-    if(game->table[line][column].piece != NONE){
+    if(game->table[line][column].piece == KING || game->table[line][column].piece == PAWN){
         return BUSY;
     }
     //Place la pièce si il n'y a pas d'erreur
@@ -247,12 +241,10 @@ enum return_code place_piece(board game, int line, int column){
         if(p==NORTH){
             game->current_player = SOUTH;
             game->phase=0;
-            game->prescribed_digit=-1;
         }
         else{
             game->current_player = NORTH;
 			game->phase=1;
-			game->prescribed_digit=0;
         }
     }
     return OK;
@@ -262,29 +254,25 @@ enum return_code place_piece(board game, int line, int column){
 /* check if a piece is movable without eating another piece for each direction separatly. */
 
 bool playable_north_case (board game, int line, int column){
-	if(column>=0 && column<DIMENSION && line<DIMENSION && line-1>=0 
-	&& game->table[line-1][column].piece==NONE){
+	if(line-1>=0 && game->table[line-1][column].piece==NONE){
 		return true;
 	}
 	return false;
 }
 bool playable_west_case (board game, int line, int column){
-	if(column-1>=0 && column<DIMENSION && line<DIMENSION && line>=0
-	&& game->table[line][column-1].piece==NONE){
+	if(column-1>=0 && game->table[line][column-1].piece==NONE){
 		return true;
 	}
 	return false;
 }
 bool playable_south_case (board game, int line, int column){
-	if(column>=0 && column<DIMENSION && line+1<DIMENSION && line>=0
-	&& game->table[line+1][column].piece==NONE){
+	if(line+1<DIMENSION && game->table[line+1][column].piece==NONE){
 		return true;
 	}
 	return false;
 }
 bool playable_east_case (board game, int line, int column){
-	if(column>=0 && column+1<DIMENSION && line<DIMENSION && line>=0 
-	&& game->table[line][column+1].piece==NONE){
+	if(column+1<DIMENSION && game->table[line][column+1].piece==NONE){
 		return true;
 	}
 	return false;
@@ -294,29 +282,25 @@ bool playable_east_case (board game, int line, int column){
  * The separation of this function and the above one is to work in the case of a prescribed digit which isn't one */
 
 bool playable_north_by_eating (board game, int line, int column){
-	if(column>=0 && column<DIMENSION && line<DIMENSION && line-1>=0 
-	&& game->table[line-1][column].piece_owner!=game->current_player){
+	if(line-1>=0 && game->table[line-1][column].piece_owner!=game->current_player){
 		return true;
 	}
 	return false;
 }
 bool playable_west_by_eating (board game, int line, int column){
-	if(column-1>=0 && column<DIMENSION && line<DIMENSION && line>=0
-	&& line>=0 && game->table[line][column-1].piece_owner!=game->current_player){
+	if(column-1>=0 && game->table[line][column-1].piece_owner!=game->current_player){
 		return true;
 	}
 	return false;
 }
 bool playable_south_by_eating (board game, int line, int column){
-	if(column>=0 && column<DIMENSION && line+1<DIMENSION && line>=0
-	&& game->table[line+1][column].piece_owner!=game->current_player){
+	if(line+1<DIMENSION && game->table[line+1][column].piece_owner!=game->current_player){
 		return true;
 	}
 	return false;
 }
 bool playable_east_by_eating (board game, int line, int column){
-	if(column>=0 && column+1<DIMENSION && line<DIMENSION && line>=0 
-	&& game->table[line][column+1].piece_owner!=game->current_player){
+	if(column+1<DIMENSION && game->table[line][column+1].piece_owner!=game->current_player){
 		return true;
 	}
 	return false;
@@ -525,20 +509,6 @@ bool is_legal_for_2_or_more (board game, int line, int column){
 	return false;
 }
 
-/* Simplify the call of the 2 case for other functions */
-
-bool is_legal_for_piece(board game, int line, int column) {
-    if (game->table[line][column].piece_owner == game->current_player) {
-        if (game->table[line][column].digit == 1) {
-            return is_legal_for_1(game, line, column);
-        } 
-        else if (game->table[line][column].digit > 1) {
-            return is_legal_for_2_or_more(game, line, column);
-        }
-    }
-    return false;
-}
-
 /* Test if another piece can be moved if the current one isn't on the prescribed digit.*/
 
 bool have_another_move_available (board game){
@@ -546,7 +516,8 @@ bool have_another_move_available (board game){
 		for(int c=0;c<DIMENSION;c++){
 			if(game->table[l][c].piece_owner==game->current_player && 
 			game->table[l][c].digit==game->prescribed_digit && game->phase==1){
-				if(is_legal_for_piece(game,l,c)){
+				if((game->prescribed_digit==1 && is_legal_for_1(game,l,c)) 
+				|| (game->prescribed_digit>1 && is_legal_for_2_or_more(game,l,c))){
 					return true;
 				}
 			}
@@ -555,13 +526,36 @@ bool have_another_move_available (board game){
 	return false;
 }
 
+
+bool is_legal_for_piece(board game, int line, int column) {
+    if (game->table[line][column].piece_owner == game->current_player) {
+        if (game->table[line][column].digit == 1) {
+            return is_legal_for_1(game, line, column);
+        } else if (game->table[line][column].digit > 1) {
+            return is_legal_for_2_or_more(game, line, column);
+        }
+    }
+    return false;
+}
+
 /* The main function for the legality of a move test. */
 
 bool is_legal_move (board game, int line, int column){
  	if(game->phase==1){
-		if(game->prescribed_digit==0 || game->table[line][column].digit==game->prescribed_digit
-		|| !have_another_move_available(game)){
-			return is_legal_for_piece(game,line,column);
+		if(game->prescribed_digit==0){
+			return true;
+		}
+		else if(game->table[line][column].digit==game->prescribed_digit){
+			if((game->prescribed_digit==1 && is_legal_for_1(game,line,column)) 
+			|| (game->prescribed_digit>1 && is_legal_for_2_or_more(game,line,column))){
+				return true;
+			}
+		}
+		else if(!have_another_move_available(game)){
+			if((game->table[line][column].digit==1 && is_legal_for_1(game,line,column)) 
+			|| (game->table[line][column].digit>1 && is_legal_for_2_or_more(game,line,column))){
+				return true;
+			}
 		}
 	}
 	return false;
@@ -569,34 +563,57 @@ bool is_legal_move (board game, int line, int column){
 
 /* end of test legal_move*/
 
+int drop_condition(board game, player current_player){
+    int res=-1;
+    for(int i=0; i<DIMENSION; ++i){
+        for(int j=0; j<DIMENSION; ++j){
+            if(is_legal_move(game,i,j)==true && game->table[i][j].piece_owner == current_player){
+                return 1;
+            }
+        }
+    }
+    return res;
+}
+
 enum return_code select_piece(board game, int line, int column){
     player p = current_player(game);
-    //Gère les erreurs si l'endroit désignée par line et column n'est pas dans le plateau
-    if(line<0 || line>=DIMENSION || column<0 || column>=DIMENSION){
-        return OUT;
-    }
     //Gère l'erreur si la settings-up est en cours
     if(game->phase == 0 || game->selected_piece.line!=-1){
         return STAGE;
+    }
+    //Gère les erreurs si l'endroit désignée par line et column n'est pas dans le plateau
+    if(line<0 || line>=DIMENSION || column<0 || column>=DIMENSION){
+        return OUT;
     }
     //Gère les erreurs de selection de mauvaise piece par rapport au joueur
     if(game->table[line][column].piece_owner != p){
         return BUSY;
     }
     //Gère l'erreur de prescribed digit
-    if(game->prescribed_digit!=game->table[line][column].digit && game->prescribed_digit!=0){
-        if(have_another_move_available(game)){
-			return RULES;
-		}
+    if(game->prescribed_digit!=game->table[line][column].digit){
+        for(int i=0; i<DIMENSION; ++i){
+            for(int j=0; j<DIMENSION; ++j){
+                if(game->table[i][j].piece_owner==p){
+                    if(game->table[i][j].digit==game->prescribed_digit){
+                        return RULES;
+                    }
+                }
+            }
+        }
+    }
+    //Gère le is_legal_move
+    if(is_legal_move(game,line,column)==false){
+        //Permet de regarder si d'autre is_legal_move sont dispos
+        if(drop_condition(game, p)==1){
+            return RULES;
+        }
     }
     game->selected_piece.line=line;
     game->selected_piece.column=column;
 	game->current_position.line = line;
 	game->current_position.column = column;
-	game->last_move.line=line;
-	game->last_move.column=column;
 	game->nb_move = 0;
-	return OK;
+    return OK;
 }
 
 enum return_code cancel_move(board game){
@@ -611,27 +628,27 @@ enum return_code cancel_move(board game){
     game->table[game->current_position.line][game->current_position.column].piece_owner = NO_PLAYER;
     game->selected_piece.line = -1;
     game->selected_piece.column = -1;
-	game->nb_move=0;
     return OK;
 }
 
 enum return_code insert_pawn (board game, int line, int column) {
     player p = current_player(game);
-    int nb_piece_out = NB_INITIAL_PIECES - get_nb_pieces_on_board(game, p);
+    int nb_piece = NB_INITIAL_PIECES - get_nb_pieces_on_board(game, p);
     //Gère les erreurs si l'endroit désignée par line et column n'est pas dans le plateau
     if(line<0 || line>=DIMENSION || column<0 || column>=DIMENSION){
         return OUT;
     }
+        
     //Gère l'erreur si la settings-up est en cours
     if(game->phase == 0 || game->selected_piece.line != -1 || game->selected_piece.column != -1 ){
         return STAGE;
     }
     //Gère les erreurs si un pion est déja présent
-    if(game->table[line][column].piece != NONE){
+    if(game->table[line][column].piece == KING || game->table[line][column].piece == PAWN){
         return BUSY;
     }
     //Gère les erreurs de RULES
-    if(nb_piece_out==0 || have_another_move_available(game)==true || game->prescribed_digit != game->table[line][column].digit){
+    if(nb_piece == 0 || have_another_move_available(game)==true || game->prescribed_digit != game->table[line][column].digit){
         return RULES;
     }
     game->table[line][column].piece_owner = current_player(game);
@@ -645,105 +662,67 @@ enum return_code insert_pawn (board game, int line, int column) {
     return OK;
 }
 
-bool is_occupied_by_player (board game, int line, int column){
-	if(game->current_player==game->table[line][column].piece_owner){
-		return true;
-	}
-	return false;
-}
-
-bool is_occupied_by_another_player (board game, int line, int column){
-	if(game->current_player!=game->table[line][column].piece_owner && NO_PLAYER!=game->table[line][column].piece_owner){
-		return true;
-	}
-	return false;
-}
-
 enum return_code move_one_step (board game, direction direction){
-	int comp=game->prescribed_digit;
 	//Vérifie que la pièce est selectionné
-	 if(game->selected_piece.line == -1 || game->selected_piece.column == -1){
-		 fprintf(stderr,"DansStage");
+	 if(game->selected_piece.line != -1 || game->selected_piece.column != -1){
 		 return STAGE;
-	 }
-	 //vérifie qu'il ne passe pas 2 fois au même endroit
-	 if(direction == N && game->current_position.line - 1 == game->last_move.line){
-		 fprintf(stderr,"NRULES");
-		 return RULES;
-	 }
-	 if(direction == S && game->current_position.line + 1 == game->last_move.line){
-		 fprintf(stderr,"SRULES");
-		 return RULES;
-	 }
-	 if(direction == E && game->current_position.column + 1 == game->last_move.column){
-		 fprintf(stderr,"ERULES");
-		 return RULES;
-	 }
-	 if(direction == W && game->current_position.column - 1 == game->last_move.column){
-		 fprintf(stderr,"WRULES");
-		 return RULES;
 	 }
 	 //Vérifie que la case demandée n'est pas en dehors du tableau
 	 if(direction == N){
-		 if(game->current_position.line - 1 < 0){
-			 fprintf(stderr, "NOUT");
+		 if(game->selected_piece.line - 1 < 0){
 			 return OUT;
 		 }
 	 }
 	 if(direction == S){
-		 if(game->current_position.line + 1 == DIMENSION){
-			 fprintf(stderr, "SOUT");
+		 if(game->selected_piece.line + 1 == DIMENSION){
 			 return OUT;
 		 }
 	 }
 	 if(direction == E){
-		 if(game->current_position.column + 1 == DIMENSION){
-			 fprintf(stderr, "EOUT");
+		 if(game->selected_piece.column + 1 == DIMENSION){
 			 return OUT;
 		 }
 	 }
 	 if(direction == W){
-		 if(game->current_position.column - 1 < 0){
-			 fprintf(stderr, "WOUT");
+		 if(game->selected_piece.column - 1 < 0){
 			 return OUT;
 		 }
 	 }
-	 //Vérifie que la case n'est pas occupé par le joueur ou par un autre joueur si ce n'est pas le dernier mouvement
+	 //Vérifie que la case n'est pas occupé et que ce n'est pas le dernier mouvement
 	 if(direction == N){
-		 if(is_occupied_by_player(game,game->current_position.line - 1,game->current_position.column) || 
-		 (is_occupied_by_another_player(game,game->current_position.line - 1,game->current_position.column) && game->prescribed_digit-1 !=game->nb_move)){
-			 fprintf(stderr, "RBUSY");
+		 if(game->selected_piece.line - 1 != NONE && game->nb_move + 1 != game->prescribed_digit ){
 			 return BUSY;
 		 }
 	 }
 	 if(direction == S){
-		 if(is_occupied_by_player(game,game->current_position.line + 1,game->current_position.column) || 
-		 (is_occupied_by_another_player(game,game->current_position.line + 1,game->current_position.column) && game->prescribed_digit-1 !=game->nb_move)){
-			 fprintf(stderr, "SBUSY");
+		 if(game->selected_piece.line + 1 != NONE && game->nb_move + 1 != game->prescribed_digit){
 			 return BUSY;
 		 }
 	 }
 	 if(direction == E){
-		 if(is_occupied_by_player(game,game->current_position.line,game->current_position.column + 1) || 
-		 (is_occupied_by_another_player(game,game->current_position.line,game->current_position.column + 1) && game->prescribed_digit-1 !=game->nb_move)){
-			 fprintf(stderr, "EBUSY");
+		 if(game->selected_piece.column + 1 != NONE && game->nb_move + 1 != game->prescribed_digit){
 			 return BUSY;
 		 }
 	 }
 	 if(direction == W){
-		 if(is_occupied_by_player(game,game->current_position.line,game->current_position.column - 1) || 
-		 (is_occupied_by_another_player(game,game->current_position.line,game->current_position.column - 1) && game->prescribed_digit-1 !=game->nb_move)){
-			 fprintf(stderr, "WBUSY");
+		 if(game->selected_piece.column - 1 != NONE && game->nb_move + 1 != game->prescribed_digit){
 			 return BUSY;
 		 }
+	 }
+	 //vérifie qu'il ne passe pas 2 fois au même endroit
+	 if(direction == N && game->current_position.line - 1 == game->last_move.line){
+		 return RULES;
+	 }
+	 if(direction == S && game->current_position.line + 1 == game->last_move.line){
+		 return RULES;
+	 }
+	 if(direction == E && game->current_position.column + 1 == game->last_move.column){
+		 return RULES;
+	 }
+	 if(direction == W && game->current_position.column - 1 == game->last_move.column){
+		 return RULES;
 	 }
 	 //ACTION!
-	 game->last_move.column = game->current_position.column;
-	 game->last_move.line = game->current_position.line;
-	 game->nb_move+=1;
-	 if(game->prescribed_digit==0){
-		 comp=get_digit(game, game->selected_piece.line, game->selected_piece.column);
-	 }
 	 if(direction == N){
 		 game->current_position.line -= 1;
 		 game->table[game->current_position.line][game->current_position.column].piece 
@@ -788,7 +767,9 @@ enum return_code move_one_step (board game, direction direction){
 		 game->table[game->current_position.line][game->current_position.column+1].piece_owner
 		 = NO_PLAYER;
 	 }
-	 if(game->nb_move == comp){
+	 game->last_move.column = game->current_position.column;
+	 game->last_move.line = game->current_position.line;
+	 if(game->nb_move + 1 == game->prescribed_digit){
 		if(game->current_player==NORTH){
 			game->current_player = SOUTH;
 			game->nb_move=0;
@@ -803,7 +784,10 @@ enum return_code move_one_step (board game, direction direction){
 			game->selected_piece.column=-1;
 			game->prescribed_digit = game->table[game->current_position.line][game->current_position.column].digit;
 		}
-	}
+	 }
+	 else{
+		 game->nb_move+=1;
+	 }
 	 return OK;
 }
 
@@ -812,49 +796,46 @@ enum return_code move_one_step (board game, direction direction){
 bool can_move_toward (board game, int start_line, int start_column, int target_line, int target_column){
 	pos_path available_pos=path_for_pos(game,start_line,start_column);
 	int line_before_last_move,column_before_last_move;
-	if(is_legal_move(game,start_line,start_column)){
+	if(is_legal_for_2_or_more(game,start_line,start_column)){
 		for(int i=0;i<available_pos.max_posible_move;i++){
-		    if(available_pos.path_state[i].is_legal_path==true){
-    			line_before_last_move=available_pos.path_state[i].used_position[(available_pos.move_prescribed_digit)-1].line;
-    			column_before_last_move=available_pos.path_state[i].used_position[(available_pos.move_prescribed_digit)-1].column;
-    			switch(available_pos.path_state[i].movement[(available_pos.move_prescribed_digit)-1]){
-    				case N:
-    					if(!playable_north_by_eating(game,line_before_last_move,column_before_last_move)){
-    						break;
-    					}
-    					if(target_line==line_before_last_move-1 && target_column==column_before_last_move){
-                        	free(available_pos.path_state);
-    						return true;
-    					}
-    				case W:
-    					if(!playable_west_by_eating(game,line_before_last_move,column_before_last_move)){
-    						break;
-    					}
-    					if(target_line==line_before_last_move && target_column==column_before_last_move-1){
-                        	free(available_pos.path_state);
-    						return true;
-    					}
-    				case S:
-    					if(!playable_south_by_eating(game,line_before_last_move,column_before_last_move)){
-    						break;
-    					}
-    					if(target_line==line_before_last_move+1 && target_column==column_before_last_move){
-                        	free(available_pos.path_state);
-    						return true;
-    					}
-    				default:
-    					if(!playable_east_by_eating(game,line_before_last_move,column_before_last_move)){
-    						break;
-    					}
-    					if(target_line==line_before_last_move && target_column==column_before_last_move+1){
-                        	free(available_pos.path_state);
-    						return true;
-    					}
-    			}
-		    }
+			line_before_last_move=available_pos.path_state[i].used_position[(available_pos.move_prescribed_digit)-1].line;
+			column_before_last_move=available_pos.path_state[i].used_position[(available_pos.move_prescribed_digit)-1].column;
+			switch(available_pos.path_state[i].movement[(available_pos.move_prescribed_digit)-1]){
+				case N:
+					if(!playable_north_by_eating(game,line_before_last_move,column_before_last_move)){
+						break;
+					}
+					if(target_line==line_before_last_move-1 && target_column==column_before_last_move){
+						return true;
+						break;
+					}
+				case W:
+					if(!playable_west_by_eating(game,line_before_last_move,column_before_last_move)){
+						break;
+					}
+					if(target_line==line_before_last_move && target_column==column_before_last_move-1){
+						return true;					
+						break;
+					}
+				case S:
+					if(!playable_south_by_eating(game,line_before_last_move,column_before_last_move)){
+						break;
+					}
+					if(target_line==line_before_last_move+1 && target_column==column_before_last_move){
+						return true;
+						break;
+					}
+				default:
+					if(!playable_east_by_eating(game,line_before_last_move,column_before_last_move)){
+						break;
+					}
+					if(target_line==line_before_last_move && target_column==column_before_last_move+1){
+						return true;
+						break;
+					}
+			}
 		}
 	}
-	free(available_pos.path_state);
 	return false;
 }
 
@@ -866,11 +847,10 @@ enum return_code quick_move (board game, int start_line, int start_column, int t
 	if(game->phase!=1 || game->selected_piece.line!=-1){
 		return STAGE;
 	}
-	if(game->table[start_line][start_column].piece_owner!=game->current_player ||
-	game->table[target_line][target_column].piece_owner==game->current_player){
+	if(game->table[start_line][start_column].piece_owner!=game->current_player){
 		return BUSY;
 	}
-	if((game->prescribed_digit!=game->table[start_line][start_column].digit && have_another_move_available(game)) || !can_move_toward(game,start_line,start_column,target_line,target_column)){
+	if(!can_move_toward(game,start_line,start_column,target_line,target_column)){
 		return RULES;
 	}
 	game->table[target_line][target_column].piece = game->table[start_line][start_column].piece;
